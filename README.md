@@ -26,8 +26,8 @@ logger = logging.getLogger()
 # Add the redact filter to the logger with your custom filters
 redact_patterns = [re.compile(r'\d+')]
 
-# if no `default_mask` is passed in, 4 asterisks will be used
-logger.addFilter(loggingredactor.RedactingFilter(redact_patterns, default_mask='xx'))
+# if no `mask` is passed in, 4 asterisks will be used
+logger.addFilter(loggingredactor.RedactingFilter(redact_patterns, mask='xx'))
 
 logger.warning("This is a test 123...")
 # Output: This is a test xx...
@@ -77,7 +77,7 @@ redact_keys = ['email', 'password']
 class RedactStreamHandler(logging.StreamHandler):
     def __init__(self, *args, **kwargs):
         logging.StreamHandler.__init__(self, *args, **kwargs)
-        self.addFilter(loggingredactor.RedactingFilter(default_mask='REDACTED', mask_keys=redact_keys))
+        self.addFilter(loggingredactor.RedactingFilter(mask='REDACTED', mask_keys=redact_keys))
 
 root_logger = logging.getLogger()
 
@@ -107,7 +107,7 @@ LOGGING = {
             '()': 'loggingredactor.RedactingFilter',
             'pii_keys': ('password', 'email', 'last_name', 'first_name', 'gender', 'lastname', 'firstname',),
             'pii_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # email regex
-            'default_mask': 'REDACTED',
+            'mask': 'REDACTED',
         },
         ... # Some other configs
     }
@@ -132,6 +132,7 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 
 ### Improvements
 - Optimized function that applies the redaction (was setting the logger message value twice).
+- Changed default_mask key initialization to mask
 
 ### Bug Fixes
 - Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams

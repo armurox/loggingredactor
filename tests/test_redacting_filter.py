@@ -12,7 +12,7 @@ def logger_setup(request):
         logger.addFilter(
             loggingredactor.RedactingFilter(
                 filters,
-                default_mask='****',
+                mask='****',
                 mask_keys={'phonenumber', }
             )
         )

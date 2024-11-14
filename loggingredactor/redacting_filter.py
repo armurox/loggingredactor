@@ -12,10 +12,10 @@ class RedactingFilter(logging.Filter):
         'processName',
     }
 
-    def __init__(self, patterns='', default_mask='****', mask_keys=None):
+    def __init__(self, patterns='', mask='****', mask_keys=None):
         super(RedactingFilter, self).__init__()
         self._patterns = patterns
-        self._default_mask = str(default_mask)
+        self._mask = str(mask)
         self._mask_keys = set(mask_keys or {})
 
     def filter(self, record):
@@ -34,7 +34,7 @@ class RedactingFilter(logging.Filter):
         if content_copy:
             if isinstance(content_copy, dict):
                 for k, v in content_copy.items():
-                    content_copy[k] = self._default_mask if k in self._mask_keys else self.redact(v)
+                    content_copy[k] = self._mask if k in self._mask_keys else self.redact(v)
 
             elif isinstance(content_copy, list):
                 content_copy = [self.redact(value) for value in content_copy]
@@ -44,11 +44,11 @@ class RedactingFilter(logging.Filter):
 
             # Support for keys in extra field
             elif key and key in self._mask_keys:
-                content_copy = self._default_mask
+                content_copy = self._mask
 
             else:
                 content_copy = isinstance(content_copy, str) and content_copy or str(content_copy)
                 for pattern in self._patterns:
-                    content_copy = re.sub(pattern, self._default_mask, content_copy)
+                    content_copy = re.sub(pattern, self._mask, content_copy)
 
         return content_copy
