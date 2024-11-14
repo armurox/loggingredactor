@@ -12,9 +12,9 @@ class RedactingFilter(logging.Filter):
         'processName',
     }
 
-    def __init__(self, patterns='', mask='****', mask_keys=None):
+    def __init__(self, mask_patterns='', mask='****', mask_keys=None):
         super(RedactingFilter, self).__init__()
-        self._patterns = patterns
+        self._mask_patterns = mask_patterns
         self._mask = str(mask)
         self._mask_keys = set(mask_keys or {})
 
@@ -48,7 +48,7 @@ class RedactingFilter(logging.Filter):
 
             else:
                 content_copy = isinstance(content_copy, str) and content_copy or str(content_copy)
-                for pattern in self._patterns:
+                for pattern in self._mask_patterns:
                     content_copy = re.sub(pattern, self._mask, content_copy)
 
         return content_copy

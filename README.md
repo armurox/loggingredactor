@@ -2,7 +2,7 @@
 ![PyPI version](https://img.shields.io/pypi/v/loggingredactor.svg?color=blue)
 ![Supported Python versions](https://img.shields.io/pypi/pyversions/loggingredactor.svg?color=green)
 
-Logging Redactor is a Python library designed to redact sensitive data in logs based on regex patterns or dictionary keys. It supports JSON logging formats and handles nested data at the message level, at the positional argument level and also in the `extra` keyword argument.
+Logging Redactor is a Python library designed to redact sensitive data in logs based on regex mask_patterns or dictionary keys. It supports JSON logging formats and handles nested data at the message level, at the positional argument level and also in the `extra` keyword argument.
 
 ## Installation
 
@@ -24,10 +24,10 @@ import loggingredactor
 # Create a logger
 logger = logging.getLogger()
 # Add the redact filter to the logger with your custom filters
-redact_patterns = [re.compile(r'\d+')]
+redact_mask_patterns = [re.compile(r'\d+')]
 
 # if no `mask` is passed in, 4 asterisks will be used
-logger.addFilter(loggingredactor.RedactingFilter(redact_patterns, mask='xx'))
+logger.addFilter(loggingredactor.RedactingFilter(redact_mask_patterns, mask='xx'))
 
 logger.warning("This is a test 123...")
 # Output: This is a test xx...
@@ -41,13 +41,13 @@ import loggingredactor
 from pythonjsonlogger import jsonlogger
 
 # Create a pattern to hide api key in url. This uses a _Positive Lookbehind_
-redact_patterns = [re.compile(r'(?<=api_key=)[\w-]+')]
+redact_mask_patterns = [re.compile(r'(?<=api_key=)[\w-]+')]
 
 # Override the logging handler that you want redacted
 class RedactStreamHandler(logging.StreamHandler):
     def __init__(self, *args, **kwargs):
         logging.StreamHandler.__init__(self, *args, **kwargs)
-        self.addFilter(loggingredactor.RedactingFilter(redact_patterns))
+        self.addFilter(loggingredactor.RedactingFilter(redact_mask_patterns))
 
 root_logger = logging.getLogger()
 
@@ -105,8 +105,8 @@ LOGGING = {
         ... # Some configs
         'pii': {
             '()': 'loggingredactor.RedactingFilter',
-            'pii_keys': ('password', 'email', 'last_name', 'first_name', 'gender', 'lastname', 'firstname',),
-            'pii_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # email regex
+            'mask_keys': ('password', 'email', 'last_name', 'first_name', 'gender', 'lastname', 'firstname',),
+            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # email regex
             'mask': 'REDACTED',
         },
         ... # Some other configs
@@ -130,9 +130,10 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 
 ## Release Notes - v0.0.2:
 
-### Improvements
+### Improvements and Changes
 - Optimized function that applies the redaction (was setting the logger message value twice).
 - Changed default_mask key initialization to mask
+- Changed patterns key initialization to mask_patterns
 
 ### Bug Fixes
 - Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams
