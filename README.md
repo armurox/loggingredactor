@@ -2,7 +2,7 @@
 ![PyPI version](https://img.shields.io/pypi/v/loggingredactor.svg?color=blue)
 ![Supported Python versions](https://img.shields.io/pypi/pyversions/loggingredactor.svg?color=green)
 
-Logging Redactor is a Python library designed to redact sensitive data in logs based on regex patterns or dictionary keys. It supports JSON logging formats and handles nested data at the message level, at the positional argument level and also in the `extra` keyword argument.
+Logging Redactor is a Python library designed to redact sensitive data in logs based on regex mask_patterns or dictionary keys. It supports JSON logging formats and handles nested data at the message level, at the positional argument level and also in the `extra` keyword argument.
 
 ## Installation
 
@@ -24,10 +24,10 @@ import loggingredactor
 # Create a logger
 logger = logging.getLogger()
 # Add the redact filter to the logger with your custom filters
-redact_patterns = [re.compile(r'\d+')]
+redact_mask_patterns = [re.compile(r'\d+')]
 
-# if no `default_mask` is passed in, 4 asterisks will be used
-logger.addFilter(loggingredactor.RedactingFilter(redact_patterns, default_mask='xx'))
+# if no `mask` is passed in, 4 asterisks will be used
+logger.addFilter(loggingredactor.RedactingFilter(redact_mask_patterns, mask='xx'))
 
 logger.warning("This is a test 123...")
 # Output: This is a test xx...
@@ -41,13 +41,13 @@ import loggingredactor
 from pythonjsonlogger import jsonlogger
 
 # Create a pattern to hide api key in url. This uses a _Positive Lookbehind_
-redact_patterns = [re.compile(r'(?<=api_key=)[\w-]+')]
+redact_mask_patterns = [re.compile(r'(?<=api_key=)[\w-]+')]
 
 # Override the logging handler that you want redacted
 class RedactStreamHandler(logging.StreamHandler):
     def __init__(self, *args, **kwargs):
         logging.StreamHandler.__init__(self, *args, **kwargs)
-        self.addFilter(loggingredactor.RedactingFilter(redact_patterns))
+        self.addFilter(loggingredactor.RedactingFilter(redact_mask_patterns))
 
 root_logger = logging.getLogger()
 
@@ -70,14 +70,14 @@ import logging
 import loggingredactor
 from pythonjsonlogger import jsonlogger
 
-# Create a pattern to hide api key in url. This uses a _Positive Lookbehind_
+# This list now contains all the dictioanry keys that will have their values redacted in the logger object
 redact_keys = ['email', 'password']
 
 # Override the logging handler that you want redacted
 class RedactStreamHandler(logging.StreamHandler):
     def __init__(self, *args, **kwargs):
         logging.StreamHandler.__init__(self, *args, **kwargs)
-        self.addFilter(loggingredactor.RedactingFilter(default_mask='REDACTED', mask_keys=redact_keys))
+        self.addFilter(loggingredactor.RedactingFilter(mask='REDACTED', mask_keys=redact_keys))
 
 root_logger = logging.getLogger()
 
@@ -97,8 +97,7 @@ The above example also illustrates the logger redacting positional arguments pro
 Logging Redactor also integrates quite well with already created logging configurations, for example, say you have your logging config set up in the following format:
 ```python
 import re
-import loggingredactor
-import logging
+import logging.config
 ... # Other imports
 LOGGING = {
     ... # Your other configs
@@ -106,9 +105,9 @@ LOGGING = {
         ... # Some configs
         'pii': {
             '()': 'loggingredactor.RedactingFilter',
-            'pii_keys': ('password', 'email', 'last_name', 'first_name', 'gender', 'lastname', 'firstname',),
-            'pii_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # email regex
-            'default_mask': 'REDACTED',
+            'mask_keys': ('password', 'email', 'last_name', 'first_name', 'gender', 'lastname', 'firstname',),
+            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # email regex
+            'mask': 'REDACTED',
         },
         ... # Some other configs
     }
@@ -123,25 +122,21 @@ LOGGING = {
     ... # Rest of your configs
 }
 
-logging.config.dictConfig(config)
-... # User your logger as normal, the redaction will now be applied.
+logging.config.dictConfig(LOGGING)
+... # Use your logger as normal, the redaction will now be applied.
 ```
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
-## Release Notes - v0.0.1:
 
-### Improvements
-- Added ability to redact by key, not just by regex for extra field.
-- Added support to redact by key for positional arguments.
-- Optimized checks that identified elements of the logger object to apply the redaction rule to.
-- Added support for tuples to be provided as arguments to the logger.
-- Added support for logger message arguments to be among the redacted elements.
-- Added support for python 3.8+ (3.8 - 3.12).
+## Release Notes - v0.0.2:
 
-## Bug fixes:
-- Fixed bugs that mutated variables in place when redacting data (specific to dictionaries, lists and tuples).
-- The added support for tuples is technically a bug fix, as it was meant to be present in the original release.
+### Improvements and Changes
+- Optimized function that applies the redaction (was setting the logger message value twice).
+- Changed default_mask key initialization to mask
+- Changed patterns key initialization to mask_patterns
 
+### Bug Fixes
+- Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams
 
 ## A Note about the Motivation behind Logging Redactor:
 Logging Redactor started as a fork of [logredactor](https://pypi.org/project/logredactor/). However, due to the bugs present in the original (specifically the data mutations), it was not usable in production environments where the purpose was to only redact variables in the logs, not in their usage in the code. This, along with the fact that the original package is no longer maintained lead to the creation of Logging Redactor.

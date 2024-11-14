@@ -12,7 +12,7 @@ def logger_setup(request):
         logger.addFilter(
             loggingredactor.RedactingFilter(
                 filters,
-                default_mask='****',
+                mask='****',
                 mask_keys={'phonenumber', }
             )
         )
@@ -55,6 +55,22 @@ def test_arg_list(caplog, logger_setup):
     assert nums == ['123', '4567']
 
 
+def test_arg_list_with_none(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    nums = [None, '4567']
+    logger.warning("foo %s", nums)
+    assert caplog.records[0].message == "foo [None, '****7']"
+    assert nums == [None, '4567']
+
+
+def test_arg_list_with_digits(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    nums = [123, '4567']
+    logger.warning("foo %s", nums)
+    assert caplog.records[0].message == "foo ['****', '****7']"
+    assert nums == [123, '4567']
+
+
 def test_arg_dict(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     bar = {'bar': '123'}
@@ -63,12 +79,28 @@ def test_arg_dict(caplog, logger_setup):
     assert bar == {'bar': '123'}
 
 
+def test_arg_dict_with_digits(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    bar = {'bar': 123}
+    logger.warning("foo %s", bar)
+    assert caplog.records[0].message == "foo {'bar': '****'}"
+    assert bar == {'bar': 123}
+
+
 def test_arg_dict_with_key_to_remove(caplog, logger_setup):
     logger = logger_setup()
     dict_keys = {'phonenumber': '123', 'firstname': 'Arman'}
     logger.warning("foo %(phonenumber)s %(firstname)s", dict_keys)
     assert caplog.records[0].message == "foo **** Arman"
     assert dict_keys == {'phonenumber': '123', 'firstname': 'Arman'}
+
+
+def test_arg_dict_with_none(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    bar = {'bar': None}
+    logger.warning("foo %s", bar)
+    assert caplog.records[0].message == "foo {'bar': None}"
+    assert bar == {'bar': None}
 
 
 def test_arg_nested_dict(caplog, logger_setup):
@@ -83,6 +115,22 @@ def test_arg_nested_dict(caplog, logger_setup):
     assert bar == {
         'bar': {
             'api_key': 'key=123',
+        },
+    }
+
+
+def test_arg_nested_dict_with_none(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    bar = {
+        'bar': {
+            'api_key': None,
+        },
+    }
+    logger.warning("foo %(bar)s", bar)
+    assert caplog.records[0].message == "foo {'api_key': None}"
+    assert bar == {
+        'bar': {
+            'api_key': None,
         },
     }
 
@@ -177,3 +225,11 @@ def test_extra_do_redact_specific_key(caplog, logger_setup):
     logger.warning("foo", extra=phonenumber)
     assert caplog.records[0].phonenumber == "****"
     assert phonenumber == {'phonenumber': 'foobar'}
+
+
+def test_extra_with_none(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    phonenumber = {'phonenumber': None}
+    logger.warning("foo", extra=phonenumber)
+    assert caplog.records[0].phonenumber is None
+    assert phonenumber == {'phonenumber': None}
