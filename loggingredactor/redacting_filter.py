@@ -27,7 +27,10 @@ class RedactingFilter(logging.Filter):
         return True
 
     def redact(self, content, key=None):
-        content_copy = copy.deepcopy(content)
+        try:
+            content_copy = copy.deepcopy(content)
+        except TypeError:
+            return content
         if content_copy:
             if isinstance(content_copy, dict):
                 for k, v in content_copy.items():

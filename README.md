@@ -97,8 +97,7 @@ The above example also illustrates the logger redacting positional arguments pro
 Logging Redactor also integrates quite well with already created logging configurations, for example, say you have your logging config set up in the following format:
 ```python
 import re
-import loggingredactor
-import logging
+import logging.config
 ... # Other imports
 LOGGING = {
     ... # Your other configs
@@ -123,8 +122,8 @@ LOGGING = {
     ... # Rest of your configs
 }
 
-logging.config.dictConfig(config)
-... # User your logger as normal, the redaction will now be applied.
+logging.config.dictConfig(LOGGING)
+... # Use your logger as normal, the redaction will now be applied.
 ```
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
@@ -134,6 +133,8 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 ### Improvements
 - Optimized function that applies the redaction (was setting the logger message value twice).
 
+### Bug Fixes
+- Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams
 
 ## A Note about the Motivation behind Logging Redactor:
 Logging Redactor started as a fork of [logredactor](https://pypi.org/project/logredactor/). However, due to the bugs present in the original (specifically the data mutations), it was not usable in production environments where the purpose was to only redact variables in the logs, not in their usage in the code. This, along with the fact that the original package is no longer maintained lead to the creation of Logging Redactor.
