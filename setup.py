@@ -11,7 +11,7 @@ branch = os.getenv('GITHUB_REF', 'master').split('/')[-1]  # Default to 'master'
 url = f"https://github.com/armurox/loggingredactor/tree/{branch}"
 
 # Get version from environment variable
-version = os.getenv('RELEASE_VERSION', '0.0.1')  # Default to '0.0.1' if RELEASE_VERSION is not set
+version = os.getenv('RELEASE_VERSION', '0.0.3')  # Default to '0.0.1' if RELEASE_VERSION is not set
 # Get development status
 split_version = version.split('-')
 if len(split_version) == 2:
