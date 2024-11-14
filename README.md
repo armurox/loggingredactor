@@ -128,7 +128,7 @@ logging.config.dictConfig(LOGGING)
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
 
-## Release Notes - v0.0.2:
+## Release Notes - v0.0.3:
 
 ### Improvements and Changes
 - Optimized function that applies the redaction (was setting the logger message value twice).
@@ -136,7 +136,8 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 - Changed patterns key initialization to mask_patterns
 
 ### Bug Fixes
-- Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams
+- Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams, including TypeError
+
 
 ## A Note about the Motivation behind Logging Redactor:
 Logging Redactor started as a fork of [logredactor](https://pypi.org/project/logredactor/). However, due to the bugs present in the original (specifically the data mutations), it was not usable in production environments where the purpose was to only redact variables in the logs, not in their usage in the code. This, along with the fact that the original package is no longer maintained lead to the creation of Logging Redactor.
