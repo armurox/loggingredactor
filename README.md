@@ -128,7 +128,7 @@ logging.config.dictConfig(LOGGING)
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
 
-## Release Notes - v0.0.3:
+## Release Notes - v0.0.5:
 
 ### Improvements and Changes
 - Optimized function that applies the redaction (was setting the logger message value twice).
