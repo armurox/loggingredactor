@@ -44,7 +44,7 @@ jobs:
 
   testpypi-package:
     if: github.event_name == 'release' && github.event.release.prerelease == true
-    needs: [pytest, lint]
+    needs: [pytest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -74,7 +74,7 @@ jobs:
 
   pypi-package:
     if: github.event_name == 'release' && github.event.release.prerelease == false
-    needs: [pytest, lint]
+    needs: [pytest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
