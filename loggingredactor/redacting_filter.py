@@ -29,7 +29,7 @@ class RedactingFilter(logging.Filter):
     def redact(self, content, key=None):
         try:
             content_copy = copy.deepcopy(content)
-        except TypeError:
+        except Exception:
             return content
         if content_copy:
             if isinstance(content_copy, dict):
