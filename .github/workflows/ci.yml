@@ -8,6 +8,7 @@ on:
 
 jobs:
   pytest:
+    needs: [lint]
     runs-on: ubuntu-latest
     strategy:
       matrix:
