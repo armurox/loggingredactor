@@ -131,7 +131,14 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 ## Release Notes - v0.0.6:
 
 ### Improvements and Changes
-- Allow redaction of any generic mapping type, including `frozendict` and `OrderedDict`.
+- Allow redaction of any generic mapping type, including:
+    1. `dict`
+    2. `collections.OrderedDict`
+    3. `frozendict.frozendict`
+    4. `collections.ChainMap`
+    5. `types.MappingProxyType`
+    6. `collections.UserDict`
+and any other mapping class that inherits from `collections.Mapping`
 
 ### Bug Fixes
 - Fix bug that was converting non-string data types to strings. (Reported in issue [#7](https://github.com/armurox/loggingredactor/issues/7))

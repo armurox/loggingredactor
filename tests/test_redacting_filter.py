@@ -3,8 +3,10 @@ import pytest
 import logging
 import loggingredactor
 from frozendict import frozendict
-from collections import OrderedDict
+from collections import OrderedDict, UserDict, ChainMap
+from types import MappingProxyType
 
+MAPPING_TYPES = [dict, OrderedDict, UserDict, ChainMap, frozendict, MappingProxyType]
 
 @pytest.fixture
 def logger_setup(request):
@@ -179,164 +181,62 @@ def test_extra_nested_dict(caplog, logger_setup):
 
 def test_extra_do_redact_key(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {'thing987': '123'}
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "****"
-    assert extra_data == {'thing987': '123'}
-    assert isinstance(extra_data, dict)
-
-
-def test_extra_do_redact_key_frozen_dict(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = frozendict({'thing987': '123'})
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "****"
-    assert extra_data == {'thing987': '123'}
-    assert isinstance(extra_data, frozendict)
-
-
-def test_extra_do_redact_key_ordered_dict(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = OrderedDict({'thing987': '123'})
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "****"
-    assert extra_data == {'thing987': '123'}
-    assert isinstance(extra_data, OrderedDict)
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({'thing987': '123'})
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].thing987 == "****"
+        assert extra_data == {'thing987': '123'}
+        assert isinstance(extra_data, mapping_type)
 
 
 def test_extra_do_not_redact_key(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {'thing987': 'foobar'}
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "foobar"
-    assert extra_data == {'thing987': 'foobar'}
-    assert isinstance(extra_data, dict)
-
-
-def test_extra_do_not_redact_key_frozen_dict(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = frozendict({'thing987': 'foobar'})
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "foobar"
-    assert extra_data == {'thing987': 'foobar'}
-    assert isinstance(extra_data, frozendict)
-
-
-def test_extra_do_not_redact_key_ordered_dict(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = OrderedDict({'thing987': 'foobar'})
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "foobar"
-    assert extra_data == {'thing987': 'foobar'}
-    assert isinstance(extra_data, OrderedDict)
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({'thing987': 'foobar'})
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].thing987 == "foobar"
+        assert extra_data == {'thing987': 'foobar'}
+        assert isinstance(extra_data, mapping_type)
 
 
 def test_extra_nested_dict_with_list(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
-    assert isinstance(extra_data, dict)
-
-
-def test_extra_nested_frozen_dict_with_list(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = frozendict({
-        'bar': frozendict({
-            'thing': ['one', '456'],
-        }),
-    })
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
-    assert isinstance(extra_data, frozendict)
-
-
-def test_extra_nested_ordered_dict_with_list(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = OrderedDict({
-        'bar': OrderedDict({
-            'thing': ['one', '456'],
-        }),
-    })
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
-    assert isinstance(extra_data, OrderedDict)
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({
+            'bar': mapping_type({
+                'thing': ['one', '456'],
+            }),
+        })
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].bar['thing'][0] == 'one'
+        assert caplog.records[0].bar['thing'][1] == '****'
+        assert extra_data == {
+            'bar': {
+                'thing': ['one', '456'],
+            },
+        }
+        assert isinstance(extra_data, mapping_type)
+        assert isinstance(extra_data['bar'], mapping_type)
 
 
 def test_extra_nested_dict_with_tuple(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {
-        'bar': {
-            'thing': ('one', '456'),
-        },
-    }
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ('one', '456'),
-        },
-    }
-    assert isinstance(extra_data, dict)
-
-
-def test_extra_nested_frozen_dict_with_tuple(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = frozendict({
-        'bar': frozendict({
-            'thing': ('one', '456'),
-        }),
-    })
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ('one', '456'),
-        },
-    }
-    assert isinstance(extra_data, frozendict)
-
-
-def test_extra_nested_ordered_dict_with_tuple(caplog, logger_setup):
-    logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = OrderedDict({
-        'bar': OrderedDict({
-            'thing': ('one', '456'),
-        }),
-    })
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ('one', '456'),
-        },
-    }
-    assert isinstance(extra_data, OrderedDict)
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({
+            'bar': mapping_type({
+                'thing': ('one', '456'),
+            }),
+        })
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].bar['thing'][0] == 'one'
+        assert caplog.records[0].bar['thing'][1] == '****'
+        assert extra_data == {
+            'bar': {
+                'thing': ('one', '456'),
+            },
+        }
+        assert isinstance(extra_data, mapping_type)
+        assert isinstance(extra_data['bar'], mapping_type)
 
 
 def test_match_group(caplog, logger_setup):
