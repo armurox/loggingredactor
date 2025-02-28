@@ -8,6 +8,7 @@ from types import MappingProxyType
 
 MAPPING_TYPES = [dict, OrderedDict, UserDict, ChainMap, frozendict, MappingProxyType]
 
+
 @pytest.fixture
 def logger_setup(request):
     def get_logger(filters=''):
