@@ -9,7 +9,7 @@ on:
 jobs:
   pytest:
     needs: [lint]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.0.4
     strategy:
       matrix:
         python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
@@ -27,7 +27,7 @@ jobs:
       run: tox
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.0.4
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.10
@@ -45,7 +45,7 @@ jobs:
   testpypi-package:
     if: github.event_name == 'release' && github.event.release.prerelease == true
     needs: [pytest]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.0.4
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.10
@@ -75,7 +75,7 @@ jobs:
   pypi-package:
     if: github.event_name == 'release' && github.event.release.prerelease == false
     needs: [pytest]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.0.4
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python 3.10
