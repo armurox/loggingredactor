@@ -34,10 +34,10 @@ class RedactingFilter(logging.Filter):
             return content
         if content_copy:
             if isinstance(content_copy, Mapping):  # Covers all dict-like objects
-                content_copy = type(content_copy)({
-                    k: self._mask if k in self._mask_keys else self.redact(v)
+                content_copy = type(content_copy)([
+                    (k, self._mask if k in self._mask_keys else self.redact(v))
                     for k, v in content_copy.items()
-                })
+                ])
 
             elif isinstance(content_copy, list):
                 content_copy = [self.redact(value) for value in content_copy]
