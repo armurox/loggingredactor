@@ -183,7 +183,7 @@ def test_extra_do_redact_key(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "****"
     assert extra_data == {'thing987': '123'}
-    assert type(extra_data) == dict
+    assert isinstance(extra_data, dict)
 
 
 def test_extra_do_redact_key_frozen_dict(caplog, logger_setup):
@@ -192,7 +192,7 @@ def test_extra_do_redact_key_frozen_dict(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "****"
     assert extra_data == {'thing987': '123'}
-    assert type(extra_data) == frozendict
+    assert isinstance(extra_data, frozendict)
 
 
 def test_extra_do_redact_key_ordered_dict(caplog, logger_setup):
@@ -201,7 +201,7 @@ def test_extra_do_redact_key_ordered_dict(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "****"
     assert extra_data == {'thing987': '123'}
-    assert type(extra_data) == OrderedDict
+    assert isinstance(extra_data, OrderedDict)
 
 
 def test_extra_do_not_redact_key(caplog, logger_setup):
@@ -210,7 +210,7 @@ def test_extra_do_not_redact_key(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "foobar"
     assert extra_data == {'thing987': 'foobar'}
-    assert type(extra_data) == dict
+    assert isinstance(extra_data, dict)
 
 
 def test_extra_do_not_redact_key_frozen_dict(caplog, logger_setup):
@@ -219,7 +219,7 @@ def test_extra_do_not_redact_key_frozen_dict(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "foobar"
     assert extra_data == {'thing987': 'foobar'}
-    assert type(extra_data) == frozendict
+    assert isinstance(extra_data, frozendict)
 
 
 def test_extra_do_not_redact_key_ordered_dict(caplog, logger_setup):
@@ -228,7 +228,7 @@ def test_extra_do_not_redact_key_ordered_dict(caplog, logger_setup):
     logger.warning("foo", extra=extra_data)
     assert caplog.records[0].thing987 == "foobar"
     assert extra_data == {'thing987': 'foobar'}
-    assert type(extra_data) == OrderedDict
+    assert isinstance(extra_data, OrderedDict)
 
 
 def test_extra_nested_dict_with_list(caplog, logger_setup):
@@ -246,7 +246,7 @@ def test_extra_nested_dict_with_list(caplog, logger_setup):
             'thing': ['one', '456'],
         },
     }
-    assert type(extra_data) == dict
+    assert isinstance(extra_data, dict)
 
 
 def test_extra_nested_frozen_dict_with_list(caplog, logger_setup):
@@ -264,7 +264,7 @@ def test_extra_nested_frozen_dict_with_list(caplog, logger_setup):
             'thing': ['one', '456'],
         },
     }
-    assert type(extra_data) == frozendict
+    assert isinstance(extra_data, frozendict)
 
 
 def test_extra_nested_ordered_dict_with_list(caplog, logger_setup):
@@ -282,7 +282,7 @@ def test_extra_nested_ordered_dict_with_list(caplog, logger_setup):
             'thing': ['one', '456'],
         },
     }
-    assert type(extra_data) == OrderedDict
+    assert isinstance(extra_data, OrderedDict)
 
 
 def test_extra_nested_dict_with_tuple(caplog, logger_setup):
@@ -300,7 +300,7 @@ def test_extra_nested_dict_with_tuple(caplog, logger_setup):
             'thing': ('one', '456'),
         },
     }
-    assert type(extra_data) == dict
+    assert isinstance(extra_data, dict)
 
 
 def test_extra_nested_frozen_dict_with_tuple(caplog, logger_setup):
@@ -318,7 +318,7 @@ def test_extra_nested_frozen_dict_with_tuple(caplog, logger_setup):
             'thing': ('one', '456'),
         },
     }
-    assert type(extra_data) == frozendict
+    assert isinstance(extra_data, frozendict)
 
 
 def test_extra_nested_ordered_dict_with_tuple(caplog, logger_setup):
@@ -336,7 +336,7 @@ def test_extra_nested_ordered_dict_with_tuple(caplog, logger_setup):
             'thing': ('one', '456'),
         },
     }
-    assert type(extra_data) == OrderedDict
+    assert isinstance(extra_data, OrderedDict)
 
 
 def test_match_group(caplog, logger_setup):
