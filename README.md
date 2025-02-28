@@ -128,15 +128,13 @@ logging.config.dictConfig(LOGGING)
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
 
-## Release Notes - v0.0.5:
+## Release Notes - v0.0.6:
 
 ### Improvements and Changes
-- Optimized function that applies the redaction (was setting the logger message value twice).
-- Changed default_mask key initialization to mask
-- Changed patterns key initialization to mask_patterns
+- Allow redaction of any generic mapping type, including `frozendict` and `OrderedDict`.
 
 ### Bug Fixes
-- Handled any exceptions related to deepcopies failing, related to attempt to redact IOStreams, including TypeError
+- Fix bug that was converting non-string data types to strings. (Reported in issue [#7](https://github.com/armurox/loggingredactor/issues/7))
 
 
 ## A Note about the Motivation behind Logging Redactor:
