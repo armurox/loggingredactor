@@ -1,6 +1,7 @@
 import re
 import logging
 import copy
+from collections.abc import Mapping
 
 
 class RedactingFilter(logging.Filter):
@@ -32,22 +33,23 @@ class RedactingFilter(logging.Filter):
         except Exception:
             return content
         if content_copy:
-            if isinstance(content_copy, dict):
-                for k, v in content_copy.items():
-                    content_copy[k] = self._mask if k in self._mask_keys else self.redact(v)
+            if isinstance(content_copy, Mapping):  # Covers all dict-like objects
+                content_copy = type(content_copy)([
+                    (k, self._mask if k in self._mask_keys else self.redact(v))
+                    for k, v in content_copy.items()
+                ])
 
             elif isinstance(content_copy, list):
                 content_copy = [self.redact(value) for value in content_copy]
 
-            elif isinstance(content, tuple):
+            elif isinstance(content_copy, tuple):
                 content_copy = tuple(self.redact(value) for value in content_copy)
 
             # Support for keys in extra field
             elif key and key in self._mask_keys:
                 content_copy = self._mask
 
-            else:
-                content_copy = isinstance(content_copy, str) and content_copy or str(content_copy)
+            elif isinstance(content_copy, str):
                 for pattern in self._mask_patterns:
                     content_copy = re.sub(pattern, self._mask, content_copy)
 

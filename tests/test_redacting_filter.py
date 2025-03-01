@@ -2,6 +2,11 @@ import re
 import pytest
 import logging
 import loggingredactor
+from frozendict import frozendict
+from collections import OrderedDict, UserDict, ChainMap
+from types import MappingProxyType
+
+MAPPING_TYPES = [dict, OrderedDict, UserDict, ChainMap, frozendict, MappingProxyType]
 
 
 @pytest.fixture
@@ -67,7 +72,7 @@ def test_arg_list_with_digits(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     nums = [123, '4567']
     logger.warning("foo %s", nums)
-    assert caplog.records[0].message == "foo ['****', '****7']"
+    assert caplog.records[0].message == "foo [123, '****7']"
     assert nums == [123, '4567']
 
 
@@ -83,7 +88,7 @@ def test_arg_dict_with_digits(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     bar = {'bar': 123}
     logger.warning("foo %s", bar)
-    assert caplog.records[0].message == "foo {'bar': '****'}"
+    assert caplog.records[0].message == "foo {'bar': 123}"
     assert bar == {'bar': 123}
 
 
@@ -147,7 +152,7 @@ def test_extra_int_value(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     bar = {'bar': 123}
     logger.warning("foo", extra=bar)
-    assert caplog.records[0].bar == "****"
+    assert caplog.records[0].bar == 123
     assert bar == {'bar': 123}
 
 
@@ -155,7 +160,7 @@ def test_extra_float_value(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     bar = {'bar': 123.6}
     logger.warning("foo", extra=bar)
-    assert caplog.records[0].bar == "****.6"
+    assert caplog.records[0].bar == 123.6
     assert bar == {'bar': 123.6}
 
 
@@ -177,35 +182,62 @@ def test_extra_nested_dict(caplog, logger_setup):
 
 def test_extra_do_redact_key(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {'thing987': '123'}
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "****"
-    extra_data = {'thing987': '123'}
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({'thing987': '123'})
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].thing987 == "****"
+        assert extra_data == {'thing987': '123'}
+        assert isinstance(extra_data, mapping_type)
 
 
 def test_extra_do_not_redact_key(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {'thing987': 'foobar'}
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].thing987 == "foobar"
-    extra_data = {'thing987': 'foobar'}
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({'thing987': 'foobar'})
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].thing987 == "foobar"
+        assert extra_data == {'thing987': 'foobar'}
+        assert isinstance(extra_data, mapping_type)
 
 
 def test_extra_nested_dict_with_list(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
-    extra_data = {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
-    logger.warning("foo", extra=extra_data)
-    assert caplog.records[0].bar['thing'][0] == 'one'
-    assert caplog.records[0].bar['thing'][1] == '****'
-    assert extra_data == {
-        'bar': {
-            'thing': ['one', '456'],
-        },
-    }
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({
+            'bar': mapping_type({
+                'thing': ['one', '456'],
+            }),
+        })
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].bar['thing'][0] == 'one'
+        assert caplog.records[0].bar['thing'][1] == '****'
+        assert extra_data == {
+            'bar': {
+                'thing': ['one', '456'],
+            },
+        }
+        assert isinstance(extra_data, mapping_type)
+        assert isinstance(extra_data['bar'], mapping_type)
+
+
+def test_extra_nested_dict_with_tuple(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    for mapping_type in MAPPING_TYPES:
+        extra_data = mapping_type({
+            'bar': mapping_type({
+                'thing': ('one', '456'),
+            }),
+        })
+        logger.warning("foo", extra=extra_data)
+        assert caplog.records[0].bar['thing'][0] == 'one'
+        assert caplog.records[0].bar['thing'][1] == '****'
+        assert extra_data == {
+            'bar': {
+                'thing': ('one', '456'),
+            },
+        }
+        assert isinstance(extra_data, mapping_type)
+        assert isinstance(extra_data['bar'], mapping_type)
 
 
 def test_match_group(caplog, logger_setup):
