@@ -342,6 +342,7 @@ def test_arg_object_unredactable_left_untouched(caplog, logger_setup):
     logger.warning('%s', Slotted())
     assert caplog.records[0].message == "test@email.com"
 
+
 def test_arg_object_with_int_redacted(caplog, logger_setup):
     logger = logger_setup([EMAIL_PATTERN])
 
