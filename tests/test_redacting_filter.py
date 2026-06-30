@@ -464,3 +464,15 @@ def test_redaction_error_reported_with_subclass_name(caplog, request):
         '[%s.CustomRedactingFilter] Could not redact logs due to an error!'
         % CustomRedactingFilter.__module__
     )
+
+
+def test_silent_failure_suppresses_error_log(caplog, request):
+    # With silent_failure=True the redaction error is swallowed silently: the
+    # original record still emits, but no error is logged.
+    logger = logging.getLogger(request.node.name)
+    logger.addFilter(loggingredactor.RedactingFilter([EMAIL_PATTERN], silent_failure=True))
+    logger.warning('hello %s', ExplodingMapping())  # must not raise
+
+    assert [r for r in caplog.records if r.levelno == logging.ERROR] == []
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings[0].getMessage().startswith('hello ')

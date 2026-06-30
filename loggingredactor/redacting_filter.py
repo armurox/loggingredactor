@@ -18,11 +18,12 @@ class RedactingFilter(logging.Filter):
     # otherwise recurse through this same filter.
     _internal_flag = '_loggingredactor_internal'
 
-    def __init__(self, mask_patterns='', mask='****', mask_keys=None):
+    def __init__(self, mask_patterns='', mask='****', mask_keys=None, silent_failure=False):
         super(RedactingFilter, self).__init__()
         self._mask_patterns = mask_patterns
         self._mask = str(mask)
         self._mask_keys = set(mask_keys or {})
+        self._silent_failure = silent_failure
         self._subclass_cache = {}
 
     def filter(self, record):
@@ -38,12 +39,13 @@ class RedactingFilter(logging.Filter):
             except Exception:
                 # We never let a redaction failure crash the application.
                 # we will simply log it
-                logging.getLogger(record.name).exception(
-                    '[%s.%s] Could not redact logs due to an error!',
-                    type(self).__module__,
-                    type(self).__qualname__,
-                    extra={self._internal_flag: True},
-                )
+                if not self._silent_failure:
+                    logging.getLogger(record.name).exception(
+                        '[%s.%s] Could not redact logs due to an error!',
+                        type(self).__module__,
+                        type(self).__qualname__,
+                        extra={self._internal_flag: True},
+                    )
 
         return True
 

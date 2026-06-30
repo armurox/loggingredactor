@@ -33,7 +33,10 @@ logger.warning("This is a test 123...")
 # Output: This is a test xx...
 ```
 
-Python only applies the filter on that logger, so any other files using logging will not get the filter applied. To have this filter applied to all loggers do the following
+Python only applies the filter on that logger, so any other files using logging will not get the filter applied. To have this filter applied to all loggers do the following (note that you must first run 
+`pip install python-json-logger`
+to use this example
+)
 ```python
 import re
 import logging
@@ -127,11 +130,67 @@ logging.config.dictConfig(LOGGING)
 ```
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
+### Redacting common PII out of the box
+If you don't want to assemble your own patterns and keys, use `CommonPIIRedactingFilter`. It comes preloaded with patterns and keys for the most common kinds of PII, and **combines** anything you pass in with those built-ins (so you keep the defaults *and* add your own):
+
+```python
+import re
+import logging
+import loggingredactor
+
+logger = logging.getLogger("demo")
+logger.addFilter(loggingredactor.CommonPIIRedactingFilter(
+    mask="REDACTED",
+    # both optional, and combined with the built-ins rather than replacing them:
+    mask_patterns=[re.compile(r"SECRET-\w+")],
+    mask_keys={"order_token"},
+))
+
+logger.warning("contact %s or %s", "arman@example.com", "+1 415-555-2671")
+# Output: contact REDACTED or REDACTED
+
+logger.warning("login %(password)s", {"password": "hunter2"})
+# Output: login REDACTED
+```
+
+The patterns and keys are also importable directly, if you'd rather reuse them in a plain `RedactingFilter`:
+
+```python
+from loggingredactor import common_pii_filters
+
+common_pii_filters.EMAIL         # compiled email regex
+common_pii_filters.PHONE         # compiled international phone regex
+common_pii_filters.PII_PATTERNS  # [EMAIL, PHONE]
+common_pii_filters.PII_KEYS      # {'password', 'token', 'ssn', ...}
+```
+
+#### What it does and does not redact
+**Content patterns** (`PII_PATTERNS`) are matched anywhere in the logged text:
+
+| Pattern | Redacts | Does **not** redact |
+| --- | --- | --- |
+| `EMAIL` | Standard email addresses, e.g. `arman@example.com` | Malformed addresses (`a@b`, no TLD) |
+| `PHONE` | International numbers with a `+` country code, e.g. `+1 415-555-2671`, `+44 20 7946 0958`, `+91-98765-43210` | Bare local numbers with no `+` country code (`4155552671`, `(415) 555-2671`) — deliberately, so order ids, dates and amounts aren't redacted |
+
+**Keys** (`PII_KEYS`) mask the whole value whenever a dict / `extra` key matches by **exact, case-sensitive** name: `password`, `passwd`, `pwd`, `secret`, `token`, `access_token`, `refresh_token`, `api_key`, `apikey`, `authorization`, `auth`, `session`, `session_id`, `cookie`, `email`, `phone`, `phone_number`, `phonenumber`, `ssn`, `social_security_number`, `credit_card`, `card_number`, `cvv`, `first_name`, `firstname`, `last_name`, `lastname`.
+
+Because key matching is exact and case-sensitive, if your logs use other casings or spellings (e.g. `Password`, `userEmail`) pass them via `mask_keys` to extend the set.
+
+### Failing safely
+If redaction ever raises while processing a record, loggingredactor will **not** crash your application: the record is still emitted, and the error is reported via `logger.exception` on the originating logger. If you'd rather suppress that error log entirely, pass `silent_failure=True` (available on both filters):
+
+```python
+loggingredactor.RedactingFilter(mask_patterns, silent_failure=True)
+loggingredactor.CommonPIIRedactingFilter(silent_failure=True)
+```
+
 
 ## Release Notes - v0.0.7:
 
 ### Improvements and Changes
-- Add support for Python 3.13 and 3.14. (Reported in issue [#13](https://github.com/armurox/loggingredactor/issues/13))
+- Added support for Python 3.13 and 3.14. (Reported in issue [#13](https://github.com/armurox/loggingredactor/issues/13))
+- Added `CommonPIIRedactingFilter`, a filter preloaded with common PII patterns (email and international phone numbers) and keys (passwords, tokens, etc.). User-supplied `mask_patterns`/`mask_keys` are combined with the built-ins rather than replacing them. The patterns and keys are also exposed via `loggingredactor.common_pii_filters`.
+- Added a `silent_failure` keyword argument (default `False`) to both filters to suppress the error log emitted when redacting a record fails.
 
 ### Bug Fixes
 - Redact sensitive data exposed through an object's `str`/`repr` when it is logged, even if the object's type is not one of the explicitly handled types (e.g. a custom class whose `__str__` returns an email). The original object is left untouched, and numeric conversions such as `%d`/`%f` continue to use the real value since only `__str__`/`__repr__` are redacted. (Reported in issue [#12](https://github.com/armurox/loggingredactor/issues/12))
