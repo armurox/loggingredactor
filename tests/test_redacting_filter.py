@@ -3,7 +3,7 @@ import pytest
 import logging
 import loggingredactor
 from frozendict import frozendict
-from collections import OrderedDict, UserDict, ChainMap
+from collections import OrderedDict, UserDict, ChainMap, namedtuple, deque
 from collections.abc import Mapping
 from types import MappingProxyType
 
@@ -119,6 +119,75 @@ def test_arg_list_with_digits(caplog, logger_setup):
     logger.warning("foo %s", nums)
     assert caplog.records[0].message == "foo [123, '****7']"
     assert nums == [123, '4567']
+
+
+def test_arg_set(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    data = {'abc123'}
+    logger.warning("ids %s", data)
+    arg = caplog.records[0].args[0]
+    assert arg == {'abc****'}
+    assert isinstance(arg, set)
+    assert data == {'abc123'}  # original untouched
+
+
+def test_arg_frozenset(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    logger.warning("ids %s", frozenset({'abc123'}))
+    arg = caplog.records[0].args[0]
+    assert arg == frozenset({'abc****'})
+    assert isinstance(arg, frozenset)
+
+
+def test_arg_deque(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    logger.warning("q %s", deque(['abc123', 'ok']))
+    arg = caplog.records[0].args[0]
+    assert arg == deque(['abc****', 'ok'])
+    assert isinstance(arg, deque)
+
+
+def test_arg_namedtuple_preserves_type(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    Point = namedtuple('Point', ['x', 'y'])
+    logger.warning("p %s", Point('id123', 'ok'))
+    arg = caplog.records[0].args[0]
+    assert arg == ('id****', 'ok')
+    assert isinstance(arg, Point)  # rebuilt via namedtuple._make, type preserved
+    assert arg.x == 'id****'
+
+
+def test_arg_set_in_extra(caplog, logger_setup):
+    logger = logger_setup([re.compile(r'\d{3}')])
+    logger.warning("foo", extra={'tags': {'abc123'}})
+    assert caplog.records[0].tags == {'abc****'}
+    assert isinstance(caplog.records[0].tags, set)
+
+
+def test_duck_typed_collection_not_iterated(caplog, logger_setup):
+    # An object that only looks like a Collection (e.g. a Django QuerySet, whose
+    # iteration would hit the DB) must NOT be iterated; it falls back to repr
+    # redaction. We match registered Sequence/Set, not the duck-typed Collection.
+    logger = logger_setup([re.compile(r'\d{3}')])
+
+    class FakeQuerySet:
+        iterated = False
+
+        def __iter__(self):
+            FakeQuerySet.iterated = True
+            return iter(['secret123'])
+
+        def __len__(self):
+            return 1
+
+        def __contains__(self, item):
+            return False
+
+        def __repr__(self):
+            return 'FakeQuerySet([...])'
+
+    logger.warning("qs %s", FakeQuerySet())
+    assert FakeQuerySet.iterated is False
 
 
 def test_arg_dict(caplog, logger_setup):

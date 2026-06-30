@@ -1,7 +1,7 @@
 import re
 import logging
 import copy
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence, Set
 
 
 class RedactingFilter(logging.Filter):
@@ -15,6 +15,10 @@ class RedactingFilter(logging.Filter):
 
     # Set on our own logging records so we skip them (no re-redaction / recursion).
     _internal_flag = '_loggingredactor_internal'
+
+    # Registered sequences that are logically scalar (text, binary, numeric
+    # range): redact via patterns/repr, don't recurse into their elements.
+    _atomic_iterables = (str, bytes, bytearray, memoryview, range)
 
     def __init__(self, mask_patterns='', mask='****', mask_keys=None, silent_failure=False):
         super(RedactingFilter, self).__init__()
@@ -55,11 +59,13 @@ class RedactingFilter(logging.Filter):
             if isinstance(content_copy, Mapping):  # Covers all dict-like objects
                 content_copy = self._redact_mapping(content_copy)
 
-            elif isinstance(content_copy, list):
-                content_copy = [self.redact(value) for value in content_copy]
-
-            elif isinstance(content_copy, tuple):
-                content_copy = tuple(self.redact(value) for value in content_copy)
+            # Recurse into standard containers. We match Sequence/Set (which
+            # require registration), not the duck-typed Collection, so costly or
+            # side-effecting third-party iterables (Django QuerySet hitting the
+            # DB, numpy arrays, ...) are left to _redact_representation instead.
+            elif (isinstance(content_copy, (Sequence, Set))
+                    and not isinstance(content_copy, self._atomic_iterables)):
+                content_copy = self._redact_iterable(content_copy)
 
             # Support for keys in extra field
             elif key and key in self._mask_keys:
@@ -68,10 +74,10 @@ class RedactingFilter(logging.Filter):
             elif isinstance(content_copy, str):
                 content_copy = self._apply_patterns(content_copy)
 
-            # Other objects may leak via str/repr; _redact_repr handles those it
+            # Other objects may leak via str/repr; _redact_representation handles those it
             # can safely re-tag and leaves the rest (numbers, C types, etc) alone.
             else:
-                content_copy = self._redact_repr(content_copy)
+                content_copy = self._redact_representation(content_copy)
 
         return content_copy
 
@@ -100,6 +106,21 @@ class RedactingFilter(logging.Filter):
         # Keep the redacted data even if the original type is lost.
         return dict(items)
 
+    def _redact_iterable(self, iterable):
+        items = [self.redact(value) for value in iterable]
+        make = getattr(type(iterable), '_make', None)  # namedtuple support
+        if make is not None:
+            try:
+                return make(items)
+            except Exception:
+                pass
+        # Rebuild the original type (list, tuple, set, frozenset, deque, ...),
+        # falling back to a list when it can't be reconstructed.
+        try:
+            return type(iterable)(items)
+        except Exception:
+            return items
+
     def _apply_patterns(self, text):
         for pattern in self._mask_patterns:
             # A pattern is either a regex or a callable redactor (text, mask).
@@ -120,7 +141,7 @@ class RedactingFilter(logging.Filter):
         self._subclass_cache[base] = subclass
         return subclass
 
-    def _redact_repr(self, obj):
+    def _redact_representation(self, obj):
         try:
             original_str = str(obj)
             original_repr = repr(obj)
