@@ -57,9 +57,6 @@ def test_common_pii_filter_redacts_common_keys(caplog, request):
 
 
 def test_common_pii_filter_combines_user_patterns_and_keys(caplog, request):
-    # User-supplied patterns/keys are combined with the built-ins, not replacing
-    # them: the built-in email pattern and password key still work alongside the
-    # custom SECRET pattern and custom_key.
     logger = logging.getLogger(request.node.name)
     logger.addFilter(loggingredactor.CommonPIIRedactingFilter(
         [re.compile(r'SECRET-\w+')], mask='X', mask_keys={'custom_key'}))
