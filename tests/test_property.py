@@ -64,19 +64,22 @@ def test_filter_never_raises(make_filter, value):
 
 
 class _Leaky:
-    """A custom object whose repr leaks data, to exercise the repr/_make path."""
+    """A custom object whose repr leaks data, to exercise the repr-redaction
+    (per-type subclass cache) path."""
 
-    def __init__(self, n):
-        self.n = n
+    def __init__(self, payload):
+        self.payload = payload
 
     def __repr__(self):
-        return 'Leaky(secret%s)' % self.n
+        return 'Leaky(%s)' % self.payload
 
 
 class RedactionStateMachine(RuleBasedStateMachine):
-    """Drive one filter instance through a sequence of records (exercising the
+    """
+    Drive one filter instance through a sequence of records (exercising the
     subclass cache and any other per-instance state) and assert the invariants
-    hold at every step."""
+    hold at every step.
+    """
 
     def __init__(self):
         super().__init__()
@@ -88,11 +91,18 @@ class RedactionStateMachine(RuleBasedStateMachine):
         assert self.filter.filter(_record(value)) is True
         assert value == snapshot
 
-    @rule(n=st.integers())
-    def log_custom_object(self, n):
-        obj = _Leaky(n)
-        assert self.filter.filter(_record(obj)) is True
-        assert repr(obj) == 'Leaky(secret%s)' % n  # original left untouched
+    @rule(payload=st.text(alphabet=st.characters(min_codepoint=32, max_codepoint=126)))
+    def log_custom_object(self, payload):
+        obj = _Leaky(payload)
+        record = _record(obj)
+        assert self.filter.filter(record) is True
+        # The original object is never mutated
+        assert repr(obj) == 'Leaky(%s)' % payload
+        # and the cached redacting subclass redacts THIS instance correctly,
+        # not a value cached from an earlier object of the same type.
+        expected = re.sub(r'\d+', 'X', 'Leaky(%s)' % payload)
+        assert str(record.args[0]) == expected
+        assert repr(record.args[0]) == expected
 
 
 TestRedactionStateMachine = RedactionStateMachine.TestCase
