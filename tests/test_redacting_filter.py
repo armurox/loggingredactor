@@ -4,9 +4,54 @@ import logging
 import loggingredactor
 from frozendict import frozendict
 from collections import OrderedDict, UserDict, ChainMap
+from collections.abc import Mapping
 from types import MappingProxyType
 
 MAPPING_TYPES = [dict, OrderedDict, UserDict, ChainMap, frozendict, MappingProxyType]
+
+
+try:
+    import django.conf
+    if not django.conf.settings.configured:
+        django.conf.settings.configure(DEFAULT_CHARSET='utf-8')
+    from django.http import QueryDict
+    HAS_DJANGO = True
+except Exception:
+    HAS_DJANGO = False
+
+
+class QueryDictLike(dict):
+    """Mimics Django's QueryDict: the constructor parses a query string, so
+    passing a list of (key, value) tuples (the old rebuild strategy) raises."""
+
+    def __init__(self, query_string='', mutable=True):
+        super().__init__()
+        for pair in filter(None, query_string.split('&')):
+            key, _, value = pair.partition('=')
+            super().__setitem__(key, value)
+
+
+class ExplodingMapping(Mapping):
+    """A mapping whose iteration blows up, to exercise the filter's safety net."""
+
+    def __getitem__(self, key):
+        raise KeyError(key)
+
+    def __iter__(self):
+        return iter(())
+
+    def __len__(self):
+        return 1  # non-empty so redact() actually processes it
+
+    def items(self):
+        raise RuntimeError('boom')
+
+    def __deepcopy__(self, memo):
+        return self
+
+
+class CustomRedactingFilter(loggingredactor.RedactingFilter):
+    """Subclass used to verify error reporting uses the runtime class name."""
 
 
 @pytest.fixture
@@ -362,3 +407,60 @@ def test_arg_number_with_d_conversion_preserved(caplog, logger_setup):
     logger = logger_setup([re.compile(r'\d{3}')])
     logger.warning('count: %d', 1234)
     assert caplog.records[0].message == "count: 1234"
+
+
+def test_arg_mapping_with_non_standard_constructor(caplog, logger_setup):
+    # A mapping whose constructor doesn't take a list of (k, v) tuples (like
+    # Django's QueryDict) must still be redacted in place without crashing,
+    # keeping its original type.
+    logger = logger_setup([EMAIL_PATTERN])
+    qd = QueryDictLike('user=a@b.com&n=5')
+    logger.warning('%s', qd)
+    redacted = caplog.records[0].args
+    assert isinstance(redacted, QueryDictLike)
+    assert redacted == {'user': '****', 'n': '5'}
+    assert qd == {'user': 'a@b.com', 'n': '5'}  # original untouched
+
+
+@pytest.mark.skipif(not HAS_DJANGO, reason='django is not installed')
+def test_arg_django_querydict(caplog, logger_setup):
+    # The exact scenario from issue #14: a Django QueryDict no longer crashes
+    # the filter and gets redacted.
+    logger = logger_setup([EMAIL_PATTERN])
+    qd = QueryDict('user=a@b.com&n=5', mutable=False)
+    logger.warning('Processing %s', qd)
+    message = caplog.records[0].message
+    assert 'a@b.com' not in message
+    assert '****' in message
+
+
+def test_filter_survives_redaction_error(caplog, logger_setup):
+    # A failure while redacting one field must not crash logging: the original
+    # record still goes through and the error is reported on the app's logger.
+    logger = logger_setup([EMAIL_PATTERN])
+    logger.warning('hello %s', ExplodingMapping())  # must not raise
+
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings[0].getMessage().startswith('hello ')
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].getMessage() == (
+        '[loggingredactor.redacting_filter.RedactingFilter] '
+        'Could not redact logs due to an error!'
+    )
+
+
+def test_redaction_error_reported_with_subclass_name(caplog, request):
+    # The error prefix is built from the runtime class, so a subclass reports
+    # under its own name rather than a hardcoded 'RedactingFilter'.
+    logger = logging.getLogger(request.node.name)
+    logger.addFilter(CustomRedactingFilter([EMAIL_PATTERN]))
+    logger.warning('hello %s', ExplodingMapping())  # must not raise
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].getMessage() == (
+        '[%s.CustomRedactingFilter] Could not redact logs due to an error!'
+        % CustomRedactingFilter.__module__
+    )

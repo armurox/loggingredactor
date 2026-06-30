@@ -132,22 +132,8 @@ The essence boils down to adding the RedactingFilter to your logging config, and
 
 ### Bug Fixes
 - Redact sensitive data exposed through an object's `str`/`repr` when it is logged, even if the object's type is not one of the explicitly handled types (e.g. a custom class whose `__str__` returns an email). The original object is left untouched, and numeric conversions such as `%d`/`%f` continue to use the real value since only `__str__`/`__repr__` are redacted. (Reported in issue [#12](https://github.com/armurox/loggingredactor/issues/12))
-
-
-## Release Notes - v0.0.6:
-
-### Improvements and Changes
-- Allow redaction of any generic mapping type, including:
-    1. `dict`
-    2. `collections.OrderedDict`
-    3. `frozendict.frozendict`
-    4. `collections.ChainMap`
-    5. `types.MappingProxyType`
-    6. `collections.UserDict`
-and any other mapping class that inherits from `collections.Mapping`
-
-### Bug Fixes
-- Fix bug that was converting non-string data types to strings. (Reported in issue [#7](https://github.com/armurox/loggingredactor/issues/7))
+- Support mapping types with non-standard constructors, such as Django's `QueryDict`. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
+- Application crashes due to errors in loggingredactor no longer occur. loggingredactor will produce a handled `logger.exception` on the originating logger and logging continues with the record otherwise intact. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
 
 
 ## A Note about the Motivation behind Logging Redactor:
