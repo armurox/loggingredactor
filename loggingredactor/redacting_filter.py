@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 from collections.abc import Set
 
+
 class RedactingFilter(logging.Filter):
     # Do not try and redact the built in values. With the wrong regex it can break the logging
     ignore_keys = {
