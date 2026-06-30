@@ -22,6 +22,10 @@ class RedactingFilter(logging.Filter):
     # range): redact via patterns/repr, don't recurse into their elements.
     _atomic_iterables = (str, bytes, bytearray, memoryview, range)
 
+    # Upper bound on the per-type redacting-subclass cache, so it can't grow
+    # without bound if an app logs instances of many distinct dynamic types.
+    _max_subclass_cache = 512
+
     def __init__(self, mask_patterns='', mask='****', mask_keys=None, silent_failure=False):
         super(RedactingFilter, self).__init__()
         self._mask_patterns = mask_patterns
@@ -58,20 +62,19 @@ class RedactingFilter(logging.Filter):
         except Exception:
             return content
         if content_copy:
-            if isinstance(content_copy, Mapping):  # Covers all dict-like objects
+            if key and key in self._mask_keys:
+                content_copy = self._mask
+
+            elif isinstance(content_copy, Mapping):  # Covers all dict-like objects
                 content_copy = self._redact_mapping(content_copy)
 
             # Recurse into standard containers. We match Sequence/Set (which
             # require registration), not the duck-typed Collection, so costly or
             # side-effecting third-party iterables (Django QuerySet hitting the
-            # DB, numpy arrays, ...) are left to _redact_representation instead.
+            # DB, numpy arrays,) are left to _redact_representation instead.
             elif (isinstance(content_copy, (Sequence, Set))
                     and not isinstance(content_copy, self._atomic_iterables)):
                 content_copy = self._redact_iterable(content_copy)
-
-            # Support for keys in extra field
-            elif key and key in self._mask_keys:
-                content_copy = self._mask
 
             elif isinstance(content_copy, str):
                 content_copy = self._apply_patterns(content_copy)
@@ -140,6 +143,8 @@ class RedactingFilter(logging.Filter):
             '__str__': lambda self: self._lr_str,
             '__repr__': lambda self: self._lr_repr,
         })
+        if len(self._subclass_cache) >= self._max_subclass_cache:
+            self._subclass_cache.clear()  # bound memory; live types just re-cache
         self._subclass_cache[base] = subclass
         return subclass
 

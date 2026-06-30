@@ -250,6 +250,7 @@ It works in a logging config the same way, as a regular filter argument:
 - Redact sensitive data exposed through an object's `str`/`repr` when it is logged, even if the object's type is not one of the explicitly handled types (e.g. a custom class whose `__str__` returns an email). The original object is left untouched, and numeric conversions such as `%d`/`%f` continue to use the real value since only `__str__`/`__repr__` are redacted. (Reported in issue [#12](https://github.com/armurox/loggingredactor/issues/12))
 - Support mapping types with non-standard constructors, such as Django's `QueryDict`. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
 - Application crashes due to errors in loggingredactor no longer occur. loggingredactor will produce a handled `logger.exception` on the originating logger and logging continues with the record otherwise intact. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
+- A field whose name is in `mask_keys` is now masked wholesale regardless of its value's type. Previously a container value (e.g. a dict or list) under a masked key was recursed into rather than masked, which could leave its contents unredacted.
 
 
 ## A Note about the Motivation behind Logging Redactor:

@@ -196,6 +196,31 @@ def test_duck_typed_collection_redacted_via_repr_not_iterated(caplog, logger_set
     assert caplog.records[0].getMessage() == "qs <QuerySet [<User: alice****>]>"
 
 
+def test_mask_keys_masks_whole_container_value(caplog, logger_setup):
+    # A field whose name is in mask_keys is masked wholesale, even when its
+    # value is a container (dict / list), not recursed into.
+    logger = logger_setup()  # mask_keys={'phonenumber'}
+    numbers = {'home': '123', 'work': '456'}
+    logger.warning("foo", extra={'phonenumber': numbers})
+    assert caplog.records[0].phonenumber == "****"
+    assert numbers == {'home': '123', 'work': '456'}  # original untouched
+
+    logger.warning("bar", extra={'phonenumber': ['123', '456']})
+    assert caplog.records[1].phonenumber == "****"
+
+
+def test_subclass_cache_is_bounded():
+    # Logging instances of many distinct (dynamically created) types must not
+    # grow the subclass cache without bound.
+    f = loggingredactor.RedactingFilter([re.compile(r'\d+')], silent_failure=True)
+    cap = f._max_subclass_cache
+    for i in range(cap + 50):
+        cls = type('Dyn%d' % i, (), {'__repr__': lambda self: 'leak123'})
+        record = logging.LogRecord('t', logging.WARNING, 'p.py', 1, '%s', (cls(),), None)
+        f.filter(record)
+    assert len(f._subclass_cache) <= cap
+
+
 def test_perverse_objects_never_raise():
     # Whatever we throw at it, filtering must never raise and must let the log
     # through (handled gracefully, or caught by the never-crash safety net).
