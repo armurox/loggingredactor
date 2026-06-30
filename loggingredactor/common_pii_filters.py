@@ -92,15 +92,16 @@ def _build_phone_patterns(phone_regions):
 
 
 class CommonPIIRedactingFilter(RedactingFilter):
-    """A :class:`RedactingFilter` preloaded with common PII patterns and keys.
+    """
+    Preloaded with common PII patterns and keys.
 
-    The built-in patterns (email + phone) and keys (:data:`PII_KEYS`) are always
-    applied; ``mask_patterns`` / ``mask_keys`` are combined with them, not
+    The built-in patterns and keys are always
+    applied; mask_pattern amd mask_keys are combined with them, not
     replacing them.
 
-    ``phone_regions`` is ``None`` for every curated region plus international
-    ``+CC`` numbers, or a list of ISO 3166-1 alpha-2 codes to limit it to those
-    (using ``phonenumbers`` for validated detection when it is installed).
+    phone_regions not being provided for every curated region plus international
+    means we fallback to redacting all of them via regex.
+    If specific regions are provided, then we will redact those
     """
 
     def __init__(self, mask_patterns=None, mask='****', mask_keys=None,
