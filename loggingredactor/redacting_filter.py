@@ -18,6 +18,7 @@ class RedactingFilter(logging.Filter):
         self._mask_patterns = mask_patterns
         self._mask = str(mask)
         self._mask_keys = set(mask_keys or {})
+        self._subclass_cache = {}
 
     def filter(self, record):
         d = vars(record)
@@ -50,7 +51,53 @@ class RedactingFilter(logging.Filter):
                 content_copy = self._mask
 
             elif isinstance(content_copy, str):
-                for pattern in self._mask_patterns:
-                    content_copy = re.sub(pattern, self._mask, content_copy)
+                content_copy = self._apply_patterns(content_copy)
+
+            # Any other object may expose data to be redacted through its
+            # str/repr. _redact_repr only redacts objects it can safely re-tag
+            # (so numeric conversions like %d/%f keep working). Anything it
+            # cannot handle - numbers, bytes, C types, __slots__ objects - is
+            # left untouched rather than guessing based on its type.
+            else:
+                content_copy = self._redact_repr(content_copy)
 
         return content_copy
+
+    def _apply_patterns(self, text):
+        for pattern in self._mask_patterns:
+            text = re.sub(pattern, self._mask, text)
+        return text
+
+    def _redacting_subclass(self, base):
+        cached = self._subclass_cache.get(base)
+        if cached is not None:
+            return cached
+        subclass = type('Redacted%s' % base.__name__, (base,), {
+            '__str__': lambda self: self._lr_str,
+            '__repr__': lambda self: self._lr_repr,
+        })
+        self._subclass_cache[base] = subclass
+        return subclass
+
+    def _redact_repr(self, obj):
+        try:
+            original_str = str(obj)
+            original_repr = repr(obj)
+        except Exception:
+            return obj
+
+        redacted_str = self._apply_patterns(original_str)
+        redacted_repr = self._apply_patterns(original_repr)
+        if redacted_str == original_str and redacted_repr == original_repr:
+            return obj
+
+        # We're subclassing the class and replacing it rather
+        # than doing it directly on the class to avoid affecting
+        # all original instances of the object basically
+        try:
+            obj._lr_str = redacted_str
+            obj._lr_repr = redacted_repr
+            obj.__class__ = self._redacting_subclass(type(obj))
+            return obj
+        except Exception:
+            return obj

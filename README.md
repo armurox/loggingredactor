@@ -128,6 +128,12 @@ logging.config.dictConfig(LOGGING)
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
 
+## Release Notes - v0.0.7:
+
+### Bug Fixes
+- Redact sensitive data exposed through an object's `str`/`repr` when it is logged, even if the object's type is not one of the explicitly handled types (e.g. a custom class whose `__str__` returns an email). The original object is left untouched, and numeric conversions such as `%d`/`%f` continue to use the real value since only `__str__`/`__repr__` are redacted. (Reported in issue [#12](https://github.com/armurox/loggingredactor/issues/12))
+
+
 ## Release Notes - v0.0.6:
 
 ### Improvements and Changes

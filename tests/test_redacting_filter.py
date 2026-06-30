@@ -265,3 +265,99 @@ def test_extra_with_none(caplog, logger_setup):
     logger.warning("foo", extra=phonenumber)
     assert caplog.records[0].phonenumber is None
     assert phonenumber == {'phonenumber': None}
+
+
+EMAIL_PATTERN = re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b')
+
+
+def test_arg_object_str_leak(caplog, logger_setup):
+    # An object whose str() exposes data should be redacted (the reported bug)
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Foo:
+        def __str__(self):
+            return 'test@email.com'
+
+    foo = Foo()
+    logger.warning('test@email.com - %s', foo)
+    assert caplog.records[0].message == "**** - ****"
+    # The original object is untouched
+    assert str(foo) == 'test@email.com'
+
+
+def test_arg_object_repr_leak(caplog, logger_setup):
+    # Redaction also applies when the object is rendered via repr (e.g. in a list)
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Foo:
+        def __repr__(self):
+            return 'Foo(test@email.com)'
+
+    foo = Foo()
+    logger.warning('%s', [foo])
+    assert caplog.records[0].message == "[Foo(****)]"
+    assert repr(foo) == 'Foo(test@email.com)'
+
+
+def test_arg_object_non_matching_untouched(caplog, logger_setup):
+    # An object whose representation has nothing to redact is left as-is
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Foo:
+        def __str__(self):
+            return 'nothing sensitive here'
+
+    logger.warning('%s', Foo())
+    assert caplog.records[0].message == "nothing sensitive here"
+
+
+def test_arg_object_numeric_conversion_preserved(caplog, logger_setup):
+    # %d uses __int__, which we never touch, so numeric formatting keeps working
+    # even when the object's str() would otherwise be redacted
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Weird:
+        def __int__(self):
+            return 9
+
+        def __str__(self):
+            return 'test@email.com'
+
+    logger.warning('%s is %d', Weird(), Weird())
+    assert caplog.records[0].message == "**** is 9"
+
+
+def test_arg_object_unredactable_left_untouched(caplog, logger_setup):
+    # Objects whose __class__ can't be reassigned (e.g. __slots__ with no
+    # __dict__) are left untouched rather than replaced with a string, so that
+    # non-string conversions like %d keep working. Their repr is not redacted.
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Slotted:
+        __slots__ = ()
+
+        def __str__(self):
+            return 'test@email.com'
+
+    logger.warning('%s', Slotted())
+    assert caplog.records[0].message == "test@email.com"
+
+def test_arg_object_with_int_redacted(caplog, logger_setup):
+    logger = logger_setup([EMAIL_PATTERN])
+
+    class Slotted:
+        __int__ = ()
+
+        def __str__(self):
+            return 'test@email.com'
+
+    logger.warning('%s', Slotted())
+    assert caplog.records[0].message == "****"
+
+
+def test_arg_number_with_d_conversion_preserved(caplog, logger_setup):
+    # Numbers are left untouched (not re-taggable), so %d keeps working even
+    # when a pattern would otherwise match their digits.
+    logger = logger_setup([re.compile(r'\d{3}')])
+    logger.warning('count: %d', 1234)
+    assert caplog.records[0].message == "count: 1234"
