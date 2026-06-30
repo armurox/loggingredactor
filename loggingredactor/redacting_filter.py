@@ -169,4 +169,3 @@ class RedactingFilter(logging.Filter):
             return obj
         except Exception:
             return obj
-
