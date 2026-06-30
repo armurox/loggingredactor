@@ -80,7 +80,7 @@ class RedactingFilter(logging.Filter):
             (k, self._mask if k in self._mask_keys else self.redact(v))
             for k, v in mapping.items()
         ]
-        # Mutate in place to keep the exact type and avoid non-standard
+        # Mutates in place to keep the exact type and avoid non-standard
         # constructors like Django's QueryDict (issue #14).
         try:
             for k, v in items:
@@ -88,7 +88,7 @@ class RedactingFilter(logging.Filter):
             return mapping
         except Exception:
             pass
-        # Immutable mappings (e.g. frozendict) we rebuild.
+        # For immutable mappings (e.g. frozendict) we rebuild.
         try:
             return type(mapping)(items)
         except Exception:
@@ -97,7 +97,7 @@ class RedactingFilter(logging.Filter):
             return type(mapping)(dict(items))
         except Exception:
             pass
-        # Last resort: keep the redacted data even if the original type is lost.
+        # Keep the redacted data even if the original type is lost.
         return dict(items)
 
     def _apply_patterns(self, text):
