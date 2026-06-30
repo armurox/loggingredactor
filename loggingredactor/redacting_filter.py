@@ -13,9 +13,7 @@ class RedactingFilter(logging.Filter):
         'processName',
     }
 
-    # Our own error records carry this attribute so the filter skips them
-    # instead of redacting (and possibly failing on) them again, which would
-    # otherwise recurse through this same filter.
+    # Set on our own logging records so we skip them (no re-redaction / recursion).
     _internal_flag = '_loggingredactor_internal'
 
     def __init__(self, mask_patterns='', mask='****', mask_keys=None, silent_failure=False):
@@ -37,8 +35,7 @@ class RedactingFilter(logging.Filter):
             try:
                 d[k] = self.redact(content, k)
             except Exception:
-                # We never let a redaction failure crash the application.
-                # we will simply log it
+                # We should never crash the app on a redaction failure.
                 if not self._silent_failure:
                     logging.getLogger(record.name).exception(
                         '[%s.%s] Could not redact logs due to an error!',
@@ -111,7 +108,14 @@ class RedactingFilter(logging.Filter):
 
     def _apply_patterns(self, text):
         for pattern in self._mask_patterns:
-            text = re.sub(pattern, self._mask, text)
+            # A pattern may be a regex (str / compiled) applied via re.sub, or a
+            # callable redactor taking (text, mask) and returning redacted text
+            # (used, e.g., for phonenumbers-based detection). Compiled regexes
+            # are not callable, so this cleanly tells the two apart.
+            if callable(pattern):
+                text = pattern(text, self._mask)
+            else:
+                text = re.sub(pattern, self._mask, text)
         return text
 
     def _redacting_subclass(self, base):

@@ -153,28 +153,68 @@ logger.warning("login %(password)s", {"password": "hunter2"})
 # Output: login REDACTED
 ```
 
-The patterns and keys are also importable directly, if you'd rather reuse them in a plain `RedactingFilter`:
+Out of the box it redacts email addresses and phone numbers in the message text, and masks the value of common sensitive keys (e.g. `password`, `token`, `api_key`, `ssn`, `credit_card`, `email`, `phone`) in dicts and `extra`. Key matching is exact and case-sensitive, so add any other casings/spellings you use via `mask_keys`.
+
+#### Picking which countries' phone numbers to redact
+By default phone numbers are redacted for all built-in countries (US, GB, DE, FR, IN, AE, AU) plus any international `+CC` number. Pass `phone_regions` ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) codes) to restrict it:
 
 ```python
-from loggingredactor import common_pii_filters
-
-common_pii_filters.EMAIL         # compiled email regex
-common_pii_filters.PHONE         # compiled international phone regex
-common_pii_filters.PII_PATTERNS  # [EMAIL, PHONE]
-common_pii_filters.PII_KEYS      # {'password', 'token', 'ssn', ...}
+# only redact UAE and US phone numbers
+loggingredactor.CommonPIIRedactingFilter(phone_regions=["AE", "US"])
 ```
 
-#### What it does and does not redact
-**Content patterns** (`PII_PATTERNS`) are matched anywhere in the logged text:
+For accurate, validated detection — and coverage beyond the built-in countries — install the optional [`phonenumbers`](https://pypi.org/project/phonenumbers/) library; when present it's used automatically for the regions you list. Note that it is NOT a requirement however.
 
-| Pattern | Redacts | Does **not** redact |
-| --- | --- | --- |
-| `EMAIL` | Standard email addresses, e.g. `arman@example.com` | Malformed addresses (`a@b`, no TLD) |
-| `PHONE` | International numbers with a `+` country code, e.g. `+1 415-555-2671`, `+44 20 7946 0958`, `+91-98765-43210` | Bare local numbers with no `+` country code (`4155552671`, `(415) 555-2671`) — deliberately, so order ids, dates and amounts aren't redacted |
+You can also grab a single country's pattern to use in a plain `RedactingFilter`:
 
-**Keys** (`PII_KEYS`) mask the whole value whenever a dict / `extra` key matches by **exact, case-sensitive** name: `password`, `passwd`, `pwd`, `secret`, `token`, `access_token`, `refresh_token`, `api_key`, `apikey`, `authorization`, `auth`, `session`, `session_id`, `cookie`, `email`, `phone`, `phone_number`, `phonenumber`, `ssn`, `social_security_number`, `credit_card`, `card_number`, `cvv`, `first_name`, `firstname`, `last_name`, `lastname`.
+```python
+from loggingredactor import RedactingFilter
+from loggingredactor.common_pii_filters import PHONE
 
-Because key matching is exact and case-sensitive, if your logs use other casings or spellings (e.g. `Password`, `userEmail`) pass them via `mask_keys` to extend the set.
+logging.getLogger().addFilter(RedactingFilter([PHONE.AE, PHONE.US]))
+```
+
+#### In an existing logging config (`dictConfig`)
+`CommonPIIRedactingFilter` slots into a logging config just like `RedactingFilter`, so you get the standard patterns and keys without listing them yourself:
+
+```python
+import logging.config
+
+LOGGING = {
+    ... # Your other configs
+    'filters': {
+        'pii': {
+            '()': 'loggingredactor.CommonPIIRedactingFilter',
+            'phone_regions': ('AE', 'US'),   # optional; default is all built-in countries
+            'mask_keys': ('internal_id',),   # optional; combined with the built-in keys
+            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # optional, combines with exisitng mask_patterns
+            'mask': 'REDACTED',
+        },
+    },
+    'handlers': {
+        ... # Some handlers
+        'stdout': {
+            ... # Some configs
+            'filters': ['pii'],
+        },
+    },
+    ... # Rest of your configs
+}
+
+logging.config.dictConfig(LOGGING)
+```
+
+Or pull specific standard patterns into a plain `RedactingFilter`:
+
+```python
+import loggingredactor
+
+'pii': {
+    '()': 'loggingredactor.RedactingFilter',
+    'mask_patterns': [loggingredactor.common_pii_filters.EMAIL, loggingredactor.common_pii_filters.PHONE.AE],
+    'mask': 'REDACTED',
+},
+```
 
 ### Failing safely
 If redaction ever raises while processing a record, loggingredactor will **not** crash your application: the record is still emitted, and the error is reported via `logger.exception` on the originating logger. If you'd rather suppress that error log entirely, pass `silent_failure=True` (available on both filters):
@@ -189,7 +229,8 @@ loggingredactor.CommonPIIRedactingFilter(silent_failure=True)
 
 ### Improvements and Changes
 - Added support for Python 3.13 and 3.14. (Reported in issue [#13](https://github.com/armurox/loggingredactor/issues/13))
-- Added `CommonPIIRedactingFilter`, a filter preloaded with common PII patterns (email and international phone numbers) and keys (passwords, tokens, etc.). User-supplied `mask_patterns`/`mask_keys` are combined with the built-ins rather than replacing them. The patterns and keys are also exposed via `loggingredactor.common_pii_filters`.
+- Added `CommonPIIRedactingFilter`, a filter preloaded with common PII patterns (email and phone numbers) and keys (passwords, tokens, etc.). User-supplied `mask_patterns`/`mask_keys` are combined with the built-ins rather than replacing them.
+- Added per-country phone number redaction: select countries with `phone_regions` (ISO 3166-1 alpha-2 codes) or use a single country's pattern directly via `loggingredactor.common_pii_filters.PHONE` (e.g. `PHONE.AE`). When the optional `phonenumbers` library is installed it is used for accurate, validated detection of the selected regions; it is never required.
 - Added a `silent_failure` keyword argument (default `False`) to both filters to suppress the error log emitted when redacting a record fails.
 
 ### Bug Fixes
