@@ -33,7 +33,10 @@ logger.warning("This is a test 123...")
 # Output: This is a test xx...
 ```
 
-Python only applies the filter on that logger, so any other files using logging will not get the filter applied. To have this filter applied to all loggers do the following
+Python only applies the filter on that logger, so any other files using logging will not get the filter applied. To have this filter applied to all loggers do the following (note that you must first run 
+`pip install python-json-logger`
+to use this example
+)
 ```python
 import re
 import logging
@@ -127,21 +130,127 @@ logging.config.dictConfig(LOGGING)
 ```
 The essence boils down to adding the RedactingFilter to your logging config, and to the filters section of the associated handlers to which you want to apply the redaction.
 
+### Redacting common PII out of the box
+If you don't want to assemble your own patterns and keys, use `CommonPIIRedactingFilter`. It comes preloaded with patterns and keys for the most common kinds of PII, and **combines** anything you pass in with those built-ins (so you keep the defaults *and* add your own):
 
-## Release Notes - v0.0.6:
+```python
+import re
+import logging
+import loggingredactor
+
+logger = logging.getLogger("demo")
+logger.addFilter(loggingredactor.CommonPIIRedactingFilter(
+    mask="REDACTED",
+    # both optional, and combined with the built-ins rather than replacing them:
+    mask_patterns=[re.compile(r"SECRET-\w+")],
+    mask_keys={"order_token"},
+))
+
+logger.warning("contact %s or %s", "arman@example.com", "+1 415-555-2671")
+# Output: contact REDACTED or REDACTED
+
+logger.warning("login %(password)s", {"password": "hunter2"})
+# Output: login REDACTED
+```
+
+Out of the box it redacts email addresses and phone numbers in the message text, and masks the value of common sensitive keys (e.g. `password`, `token`, `api_key`, `ssn`, `credit_card`, `email`, `phone`) in dicts and `extra`. Key matching is exact and case-sensitive, so add any other casings/spellings you use via `mask_keys`.
+
+#### Picking which countries' phone numbers to redact
+By default phone numbers are redacted for all built-in countries (US, GB, DE, FR, IN, AE, AU) plus any international `+CC` number. Pass `phone_regions` ([ISO 3166-1 alpha-2](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) codes) to restrict it:
+
+```python
+# only redact UAE and US phone numbers
+loggingredactor.CommonPIIRedactingFilter(phone_regions=["AE", "US"])
+```
+
+For accurate, validated detection — and coverage beyond the built-in countries — install the optional [`phonenumbers`](https://pypi.org/project/phonenumbers/) library; when present it's used automatically for the regions you list. Note that it is NOT a requirement however.
+
+You can also grab a single country's pattern to use in a plain `RedactingFilter`:
+
+```python
+from loggingredactor import RedactingFilter
+from loggingredactor.common_pii_filters import PHONE
+
+logging.getLogger().addFilter(RedactingFilter([PHONE.AE, PHONE.US]))
+```
+
+#### In an existing logging config (`dictConfig`)
+`CommonPIIRedactingFilter` slots into a logging config just like `RedactingFilter`, so you get the standard patterns and keys without listing them yourself:
+
+```python
+import logging.config
+
+LOGGING = {
+    ... # Your other configs
+    'filters': {
+        'pii': {
+            '()': 'loggingredactor.CommonPIIRedactingFilter',
+            'phone_regions': ('AE', 'US'),   # optional; default is all built-in countries
+            'mask_keys': ('internal_id',),   # optional; combined with the built-in keys
+            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # optional, combines with existng mask_patterns
+            'mask': 'REDACTED',
+        },
+    },
+    'handlers': {
+        ... # Some handlers
+        'stdout': {
+            ... # Some configs
+            'filters': ['pii'],
+        },
+    },
+    ... # Rest of your configs
+}
+
+logging.config.dictConfig(LOGGING)
+```
+
+Or pull specific standard patterns into a plain `RedactingFilter`:
+
+```python
+import loggingredactor
+
+'pii': {
+    '()': 'loggingredactor.RedactingFilter',
+    'mask_patterns': [loggingredactor.common_pii_filters.EMAIL, loggingredactor.common_pii_filters.PHONE.AE],
+    'mask': 'REDACTED',
+},
+```
+
+### Failing safely
+If redaction ever raises while processing a record, loggingredactor will **not** crash your application: the record is still emitted, and the error is reported via `logger.exception` on the originating logger. If you'd rather suppress that error log entirely, pass `silent_failure=True` (available on both filters):
+
+```python
+loggingredactor.RedactingFilter(mask_patterns, silent_failure=True)
+loggingredactor.CommonPIIRedactingFilter(silent_failure=True)
+```
+
+It works in a logging config the same way, as a regular filter argument:
+
+```python
+'filters': {
+    'pii': {
+        '()': 'loggingredactor.CommonPIIRedactingFilter',
+        'mask': 'REDACTED',
+        'silent_failure': True,
+    },
+},
+```
+
+
+## Release Notes - v0.0.7:
 
 ### Improvements and Changes
-- Allow redaction of any generic mapping type, including:
-    1. `dict`
-    2. `collections.OrderedDict`
-    3. `frozendict.frozendict`
-    4. `collections.ChainMap`
-    5. `types.MappingProxyType`
-    6. `collections.UserDict`
-and any other mapping class that inherits from `collections.Mapping`
+- Added support for Python 3.13 and 3.14. (Reported in issue [#13](https://github.com/armurox/loggingredactor/issues/13))
+- Added `CommonPIIRedactingFilter`, a filter preloaded with common PII patterns (email and phone numbers) and keys (passwords, tokens, etc.). User-supplied `mask_patterns`/`mask_keys` are combined with the built-ins rather than replacing them.
+- Added per-country phone number redaction: select countries with `phone_regions` (ISO 3166-1 alpha-2 codes) or use a single country's pattern directly via `loggingredactor.common_pii_filters.PHONE` (e.g. `PHONE.AE`). When the optional `phonenumbers` library is installed it is used for accurate, validated detection of the selected regions; it is never required.
+- Added a `silent_failure` keyword argument (default `False`) to both filters to suppress the error log emitted when redacting a record fails.
+- Generalised container redaction beyond `list`/`tuple` to any standard sequence or set (e.g. `set`, `frozenset`, `deque`, `namedtuple`), preserving the original type where it can be reconstructed. Only registered `Sequence`/`Set` types recurse, so third-party iterables whose iteration is costly or side-effecting (e.g. a Django `QuerySet`, or a numpy array) are left untouched.
 
 ### Bug Fixes
-- Fix bug that was converting non-string data types to strings. (Reported in issue [#7](https://github.com/armurox/loggingredactor/issues/7))
+- Redact sensitive data exposed through an object's `str`/`repr` when it is logged, even if the object's type is not one of the explicitly handled types (e.g. a custom class whose `__str__` returns an email). The original object is left untouched, and numeric conversions such as `%d`/`%f` continue to use the real value since only `__str__`/`__repr__` are redacted. (Reported in issue [#12](https://github.com/armurox/loggingredactor/issues/12))
+- Support mapping types with non-standard constructors, such as Django's `QueryDict`. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
+- Application crashes due to errors in loggingredactor no longer occur. loggingredactor will produce a handled `logger.exception` on the originating logger and logging continues with the record otherwise intact. (Reported in issue [#14](https://github.com/armurox/loggingredactor/issues/14))
+- A field whose name is in `mask_keys` is now masked wholesale regardless of its value's type. Previously a container value (e.g. a dict or list) under a masked key was recursed into rather than masked, which could leave its contents unredacted.
 
 
 ## A Note about the Motivation behind Logging Redactor:
