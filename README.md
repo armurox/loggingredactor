@@ -224,6 +224,18 @@ loggingredactor.RedactingFilter(mask_patterns, silent_failure=True)
 loggingredactor.CommonPIIRedactingFilter(silent_failure=True)
 ```
 
+It works in a logging config the same way, as a regular filter argument:
+
+```python
+'filters': {
+    'pii': {
+        '()': 'loggingredactor.CommonPIIRedactingFilter',
+        'mask': 'REDACTED',
+        'silent_failure': True,
+    },
+},
+```
+
 
 ## Release Notes - v0.0.7:
 
