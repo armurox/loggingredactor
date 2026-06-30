@@ -3,7 +3,11 @@ import pytest
 import logging
 import loggingredactor
 from frozendict import frozendict
-from collections import OrderedDict, UserDict, ChainMap, namedtuple, deque
+from collections import OrderedDict
+from collections import UserDict
+from collections import ChainMap
+from collections import namedtuple
+from collections import deque
 from collections.abc import Mapping
 from types import MappingProxyType
 
