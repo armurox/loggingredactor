@@ -68,11 +68,8 @@ class RedactingFilter(logging.Filter):
             elif isinstance(content_copy, str):
                 content_copy = self._apply_patterns(content_copy)
 
-            # Any other object may expose data to be redacted through its
-            # str/repr. _redact_repr only redacts objects it can safely re-tag
-            # (so numeric conversions like %d/%f keep working). Anything it
-            # cannot handle - numbers, bytes, C types, __slots__ objects - is
-            # left untouched rather than guessing based on its type.
+            # Other objects may leak via str/repr; _redact_repr handles those it
+            # can safely re-tag and leaves the rest (numbers, C types, etc) alone.
             else:
                 content_copy = self._redact_repr(content_copy)
 
@@ -83,18 +80,15 @@ class RedactingFilter(logging.Filter):
             (k, self._mask if k in self._mask_keys else self.redact(v))
             for k, v in mapping.items()
         ]
-        # Mutating the deep-copied mapping in place preserves its exact type and
-        # avoids constructors with non-standard signatures - e.g. Django's
-        # QueryDict, whose __init__ parses a query string rather than a list of
-        # items (https://github.com/armurox/loggingredactor/issues/14).
+        # Mutate in place to keep the exact type and avoid non-standard
+        # constructors like Django's QueryDict (issue #14).
         try:
             for k, v in items:
                 mapping[k] = v
             return mapping
         except Exception:
             pass
-        # Immutable / read-only mappings (e.g. frozendict) can't be mutated in
-        # place, so rebuild them from the redacted items.
+        # Immutable mappings (e.g. frozendict) we rebuild.
         try:
             return type(mapping)(items)
         except Exception:
@@ -108,10 +102,7 @@ class RedactingFilter(logging.Filter):
 
     def _apply_patterns(self, text):
         for pattern in self._mask_patterns:
-            # A pattern may be a regex (str / compiled) applied via re.sub, or a
-            # callable redactor taking (text, mask) and returning redacted text
-            # (used, e.g., for phonenumbers-based detection). Compiled regexes
-            # are not callable, so this cleanly tells the two apart.
+            # A pattern is either a regex or a callable redactor (text, mask).
             if callable(pattern):
                 text = pattern(text, self._mask)
             else:
@@ -141,10 +132,8 @@ class RedactingFilter(logging.Filter):
         if redacted_str == original_str and redacted_repr == original_repr:
             return obj
 
-        # We're subclassing the class and replacing it rather
-        # than doing it directly on the class to avoid affecting
-        # all original instances of the object basically
-        # having their methods overriden
+        # Swap to a per-type subclass (not the original class) so only this
+        # instance's str/repr change, not every instance of its type.
         try:
             obj._lr_str = redacted_str
             obj._lr_repr = redacted_repr
