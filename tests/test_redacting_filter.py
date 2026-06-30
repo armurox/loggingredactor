@@ -164,10 +164,11 @@ def test_arg_set_in_extra(caplog, logger_setup):
     assert isinstance(caplog.records[0].tags, set)
 
 
-def test_duck_typed_collection_not_iterated(caplog, logger_setup):
+def test_duck_typed_collection_redacted_via_repr_not_iterated(caplog, logger_setup):
     # An object that only looks like a Collection (e.g. a Django QuerySet, whose
-    # iteration would hit the DB) must NOT be iterated; it falls back to repr
-    # redaction. We match registered Sequence/Set, not the duck-typed Collection.
+    # iteration would hit the DB) must NOT be iterated. We match registered
+    # Sequence/Set, not the duck-typed Collection, so it is redacted via its
+    # repr instead - which is exactly how a QuerySet would be handled.
     logger = logger_setup([re.compile(r'\d{3}')])
 
     class FakeQuerySet:
@@ -184,10 +185,41 @@ def test_duck_typed_collection_not_iterated(caplog, logger_setup):
             return False
 
         def __repr__(self):
-            return 'FakeQuerySet([...])'
+            return '<QuerySet [<User: alice123>]>'
 
     logger.warning("qs %s", FakeQuerySet())
-    assert FakeQuerySet.iterated is False
+    assert FakeQuerySet.iterated is False  # never iterated
+    assert caplog.records[0].getMessage() == "qs <QuerySet [<User: alice****>]>"
+
+
+def test_perverse_objects_never_raise():
+    # Whatever we throw at it, filtering must never raise and must let the log
+    # through (handled gracefully, or caught by the never-crash safety net).
+    f = loggingredactor.RedactingFilter([re.compile(r'\d{3}')], silent_failure=True)
+
+    class RaisingRepr:
+        def __repr__(self):
+            raise ValueError("boom")
+        __str__ = __repr__
+
+    class RaisingDeepcopy:
+        def __deepcopy__(self, memo):
+            raise RuntimeError("no copy")
+
+    class RaisingLen:
+        def __len__(self):
+            raise RuntimeError("no len")
+
+        def __iter__(self):
+            return iter([])
+
+    cyclic = ['secret123']
+    cyclic.append(cyclic)  # self-referential
+
+    perverse = [RaisingRepr(), RaisingDeepcopy(), RaisingLen(), cyclic, object()]
+    for obj in perverse:
+        record = logging.LogRecord('t', logging.WARNING, 'p.py', 1, '%s', (obj,), None)
+        assert f.filter(record) is True
 
 
 def test_arg_dict(caplog, logger_setup):
