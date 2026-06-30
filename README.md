@@ -187,7 +187,7 @@ LOGGING = {
             '()': 'loggingredactor.CommonPIIRedactingFilter',
             'phone_regions': ('AE', 'US'),   # optional; default is all built-in countries
             'mask_keys': ('internal_id',),   # optional; combined with the built-in keys
-            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # optional, combines with exisitng mask_patterns
+            'mask_patterns': (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'), ) # optional, combines with existng mask_patterns
             'mask': 'REDACTED',
         },
     },
